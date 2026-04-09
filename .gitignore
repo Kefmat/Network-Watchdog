@@ -1,0 +1,11 @@
+# Midlertidige filer fra skanning
+*.tmp
+
+# Logger
+logs/*.log
+
+# VS Code systemfiler
+.vscode/
+
+# Hvitliste med private MAC-adresser
+whitelist.txt
