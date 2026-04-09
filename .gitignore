@@ -9,3 +9,6 @@ logs/*.log
 
 # Hvitliste med private MAC-adresser
 whitelist.txt
+
+# Skjulte konfigurasjoner
+config.conf
