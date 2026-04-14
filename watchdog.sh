@@ -1,111 +1,52 @@
 #!/bin/bash
 
-# --- KONFIGURASJON ---
+# Importer alle moduler
+source "./modules/notifier.sh"
+source "./modules/reporter.sh"
+source "./modules/scanner.sh"
+
+# Konfigurasjon og sjekk
 WHITELIST="whitelist.txt"
-LOGFILE="logs/watchdog.log"
-CONFIG_FILE="config.conf"
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
+[ ! -d "logs" ] && mkdir "logs"
+[ ! -f "$WHITELIST" ] && touch "$WHITELIST"
 
-# Farger
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# Last inn konfigurasjon
-# shellcheck source=/dev/null
-[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
-
-# --- FUNKSJONER ---
-
-# Utfører en lynrask port-skanning av ukjente enheter
-scan_ports() {
-    local ip=$1
-    if command -v nmap &> /dev/null; then
-        # Skanner de 20 vanligste portene
-        nmap -F --top-ports 20 "$ip" | grep "/tcp" | awk '{print $1}' | paste -sd ", " -
-    else
-        echo "Nmap ikke installert"
-    fi
-}
-
-add_to_whitelist() {
-    local mac=$1
-    if [[ "$mac" =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]]; then
-        if ! grep -qi "$mac" "$WHITELIST"; then
-            echo "$mac" >> "$WHITELIST"
-            echo -e "${GREEN}Lagt til $mac i hvitlisten.${NC}"
-        else
-            echo -e "${YELLOW}$mac finnes allerede i hvitlisten.${NC}"
-        fi
-    else
-        echo -e "${RED}Feil: Ugyldig MAC-format.${NC}"
-    fi
-}
-
-send_webhook() {
-    local message=$1
-    if [[ -n "$WEBHOOK_URL" && "$WEBHOOK_URL" != "lim_inn_din_url_her" && "$WEBHOOK_URL" != "lim_inn_her" ]]; then
-        curl -H "Content-Type: application/json" -X POST -d "{\"content\": \"$message\"}" "$WEBHOOK_URL" &>/dev/null
-    fi
-}
-
-# --- ARGUMENT-HÅNDTERING ---
-
+# Håndtering av argumenter (bruker funksjonen fra scanner.sh)
 if [[ "$1" == "--add" ]]; then
     add_to_whitelist "$2"
     exit 0
-elif [[ "$1" == "--show" ]]; then
-    echo -e "${BLUE}--- Hvitliste ---${NC}"
-    cat "$WHITELIST"
-    exit 0
-elif [[ "$1" == "--help" ]]; then
-    echo "Bruk: ./watchdog.sh [--add MAC | --show | --help]"
-    exit 0
 fi
 
-# --- HOVEDLOGIKK ---
-
-[ ! -f "$WHITELIST" ] && touch "$WHITELIST"
-
-if ! command -v arp-scan &> /dev/null; then
-    echo -e "${RED}FEIL: arp-scan mangler. Kjør ./setup.sh${NC}"
-    exit 1
-fi
-
-echo -e "${NC}[$TIMESTAMP] Starter nettverksskanning...${NC}"
+# Start skanning
 sudo arp-scan --localnet | grep -E '([a-f0-9]{2}:){5}[a-f0-9]{2}' > current_scan.tmp
 
-FOUND_UNKNOWN=false
+TABLE_ROWS=""
+UNKNOWN_COUNT=0
+KNOWN_COUNT=0
+
 while read -r line; do
     IP=$(echo "$line" | awk '{print $1}')
     MAC=$(echo "$line" | awk '{print $2}')
     VENDOR=$(echo "$line" | cut -f3-)
 
     if ! grep -qi "$MAC" "$WHITELIST"; then
-        echo -e "${YELLOW}[!] Analyserer ukjent enhet: $IP...${NC}"
-        
-        # Finn åpne porter
+        ((UNKNOWN_COUNT++))
+        # Bruker scan_ports fra scanner.sh
         PORTS=$(scan_ports "$IP")
-        if [ -z "$PORTS" ]; then
-            PORTS="Ingen åpne porter funnet"
-        fi
-
-        ALERT_MSG="SIKKERHETSVARSEL
-Enhet: $VENDOR
-IP: $IP
-MAC: $MAC
-Apne porter: $PORTS"
+        [ -z "$PORTS" ] && PORTS="Ingen åpne porter funnet"
         
-        echo -e "${RED} [!] Ukjent enhet: $IP ($VENDOR). Porter: $PORTS${NC}" | tee -a "$LOGFILE"
-        send_webhook "$ALERT_MSG"
-        FOUND_UNKNOWN=true
+        STATUS="<span style='color: #dc3545; font-weight: bold;'>UKJENT</span>"
+        
+        # Bruker send_webhook fra notifier.sh
+        send_webhook "Sikkerhetsvarsel: Ukjent enhet detektert: $IP ($MAC). Produsent: $VENDOR. Porter: $PORTS"
+    else
+        ((KNOWN_COUNT++))
+        STATUS="Godkjent"
     fi
+    TABLE_ROWS+="<tr><td>$IP</td><td>$MAC</td><td>$VENDOR</td><td>$STATUS</td></tr>"
 done < current_scan.tmp
 
-if [ "$FOUND_UNKNOWN" = false ]; then
-    echo -e "${GREEN} [OK] Ingen ukjente enheter funnet.${NC}"
-fi
+# Generer HTML-rapport (fra reporter.sh)
+generate_html "$UNKNOWN_COUNT" "$KNOWN_COUNT" "$TABLE_ROWS"
 
+echo "Nettverksskanning fullført. Rapport er generert i logs/report.html"
 rm -f current_scan.tmp
