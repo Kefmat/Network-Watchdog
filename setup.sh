@@ -1,10 +1,8 @@
 #!/bin/bash
 
 # --- DOKUMENTASJON ---
-# SYNOPSIS: Setup script for Network Watchdog v1.4.
-# DESCRIPTION: Installerer avhengigheter (arp-scan, nmap, curl), oppretter mapper
-# og klargjør systemet for både lokal kjøring og Docker.
-# BRUK: chmod +x setup.sh && ./setup.sh
+# SYNOPSIS: Setup script for Network Watchdog v1.0.
+# DESCRIPTION: Installerer avhengigheter, oppretter mapper og setter rettigheter.
 
 # Farger for tilbakemelding
 GREEN='\033[0;32m'
@@ -34,22 +32,14 @@ fi
 
 # 2. Opprett mapper
 echo -e "\n[2/4] Oppretter mapper..."
-if [ ! -d "logs" ]; then
-    mkdir -p logs
-    echo "OK: log-mappe opprettet."
-else
-    echo "OK: log-mappe eksisterer allerede."
-fi
+mkdir -p logs modules
+echo "OK: log- og modul-mapper klargjort."
 
 # 3. Klargjør konfigurasjonsfiler
 echo -e "\n[3/4] Klargjør filer..."
 if [ ! -f "config.conf" ]; then
-    if [ -f "config.conf.example" ]; then
-        cp config.conf.example config.conf
-    else
-        echo 'WEBHOOK_URL="lim_inn_her"' > config.conf
-    fi
-    echo -e "${GREEN}OK: config.conf opprettet (Husk å legge til din Webhook URL).${NC}"
+    echo 'WEBHOOK_URL="lim_inn_her"' > config.conf
+    echo -e "${GREEN}OK: config.conf opprettet.${NC}"
 fi
 
 if [ ! -f "whitelist.txt" ]; then
@@ -61,14 +51,10 @@ fi
 echo -e "\n[4/4] Setter kjøretillatelser..."
 if [ -f "watchdog.sh" ]; then
     chmod +x watchdog.sh
-    echo -e "${GREEN}OK: watchdog.sh er nå kjørbar.${NC}"
+    [ -d "modules" ] && chmod +x modules/*.sh
+    echo -e "${GREEN}OK: Alle skript og moduler er nå kjørbare.${NC}"
 else
-    echo -e "${RED}FEIL: Fant ikke watchdog.sh i denne mappen!${NC}"
+    echo -e "${RED}FEIL: Fant ikke watchdog.sh!${NC}"
 fi
 
 echo -e "\n${BLUE}=== Installasjon fullført! ===${NC}"
-echo "Neste steg:"
-echo "1. Rediger config.conf med din Discord Webhook URL."
-echo "2. Legg til kjente MAC-adresser i whitelist.txt (eller bruk ./watchdog.sh --add [MAC])."
-echo "3. Test skanneren manuelt: ./watchdog.sh"
-echo -e "\n${BLUE}Tips: Du kan nå også bygge en Docker-container med: 'docker build -t network-watchdog .'${NC}"
