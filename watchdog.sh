@@ -14,6 +14,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Last inn konfigurasjon
+# shellcheck source=/dev/null
 [ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
 
 # --- FUNKSJONER ---
@@ -31,7 +32,7 @@ scan_ports() {
 
 add_to_whitelist() {
     local mac=$1
-    if [[ $mac =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]]; then
+    if [[ "$mac" =~ ^([a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$ ]]; then
         if ! grep -qi "$mac" "$WHITELIST"; then
             echo "$mac" >> "$WHITELIST"
             echo -e "${GREEN}Lagt til $mac i hvitlisten.${NC}"
@@ -56,9 +57,12 @@ if [[ "$1" == "--add" ]]; then
     add_to_whitelist "$2"
     exit 0
 elif [[ "$1" == "--show" ]]; then
-    echo -e "${BLUE}--- Hvitliste ---${NC}"; cat "$WHITELIST"; exit 0
+    echo -e "${BLUE}--- Hvitliste ---${NC}"
+    cat "$WHITELIST"
+    exit 0
 elif [[ "$1" == "--help" ]]; then
-    echo "Bruk: ./watchdog.sh [--add MAC | --show | --help]"; exit 0
+    echo "Bruk: ./watchdog.sh [--add MAC | --show | --help]"
+    exit 0
 fi
 
 # --- HOVEDLOGIKK ---
@@ -84,13 +88,15 @@ while read -r line; do
         
         # Finn åpne porter
         PORTS=$(scan_ports "$IP")
-        [ -z "$PORTS" ] && PORTS="Ingen åpne porter funnet"
+        if [ -z "$PORTS" ]; then
+            PORTS="Ingen åpne porter funnet"
+        fi
 
-        ALERT_MSG="🚨 **SIKKERHETSVARSEL**
-**Enhet:** $VENDOR
-**IP:** $IP
-**MAC:** $MAC
-**Åpne porter:** $PORTS"
+        ALERT_MSG="SIKKERHETSVARSEL
+Enhet: $VENDOR
+IP: $IP
+MAC: $MAC
+Apne porter: $PORTS"
         
         echo -e "${RED} [!] Ukjent enhet: $IP ($VENDOR). Porter: $PORTS${NC}" | tee -a "$LOGFILE"
         send_webhook "$ALERT_MSG"
@@ -98,5 +104,8 @@ while read -r line; do
     fi
 done < current_scan.tmp
 
-[ "$FOUND_UNKNOWN" = false ] && echo -e "${GREEN} [OK] Ingen ukjente enheter funnet.${NC}"
+if [ "$FOUND_UNKNOWN" = false ]; then
+    echo -e "${GREEN} [OK] Ingen ukjente enheter funnet.${NC}"
+fi
+
 rm -f current_scan.tmp
