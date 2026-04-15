@@ -52,6 +52,9 @@ Verktøyet er klargjort for automatisering via `cron`-jobber, inkluderer sikker 
   ```bash
   ./watchdog.sh --help
   ```
+## Demo
+<img width="1024" height="497" alt="image" src="https://github.com/user-attachments/assets/7c3f1423-2391-4d96-ac77-69efb5425157" />
+
 
 ## Docker
 
